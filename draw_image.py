@@ -1,233 +1,176 @@
 #!/usr/bin/env python3
-"""Draw the entry image for make.fun news-image-20261119.
+"""Render one 1024x1024 front page: THE WORLD TODAY, 19 November 2026.
 
-A newspaper-style front page summing up the world news of Thursday
-19 November 2026, drawn with Pillow. Output: entry.png, 1024x1024.
-All stories are as reported on 19 November 2026 (see SOURCES in README).
-Run: python3 draw_image.py
+Layout (my own): cream paper, serif masthead with a double rule, a
+full-width lead story, then a two-column grid of the remaining five
+stories. Every story is a dict; a tiny block-flow engine lays the
+blocks out column by column.
 """
-import math
+
 import os
 
 from PIL import Image, ImageDraw, ImageFont
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUT = os.path.join(HERE, "entry.png")
 
-W, H = 1024, 1024
-PAPER = (247, 243, 234)
-INK = (26, 26, 26)
-NAVY = (22, 35, 63)
-GOLD = (201, 162, 39)
-RED = (179, 39, 30)
-GRAY = (74, 74, 74)
-PANEL = (255, 255, 255)
-BORDER = (216, 210, 196)
-DARKGOLD = (138, 109, 27)
+PAGE = 1024
+MARGIN = 48
+CONTENT_W = PAGE - 2 * MARGIN
 
+PAPER = (248, 244, 234)
+INK = (26, 26, 24)
+ACCENT = (155, 34, 38)
+MUTED = (90, 90, 82)
+RULE = (26, 26, 24)
+FAINT = (180, 175, 162)
 
-def font(name, size):
-    return ImageFont.truetype(
-        os.path.join("/usr/share/fonts/truetype", name), size
-    )
+SERIF_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf"
+SANS = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+SANS_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
 
-F_TITLE = font("dejavu/DejaVuSerif-Bold.ttf", 58)
-F_DATE = font("dejavu/DejaVuSans-Bold.ttf", 30)
-F_TAG = font("dejavu/DejaVuSans-Bold.ttf", 20)
-F_HEAD = font("dejavu/DejaVuSans-Bold.ttf", 40)
-F_HEAD2 = font("dejavu/DejaVuSans-Bold.ttf", 26)
-F_SUB = font("dejavu/DejaVuSans.ttf", 24)
-F_SUB2 = font("dejavu/DejaVuSans.ttf", 21)
-F_STRIP = font("dejavu/DejaVuSans-Bold.ttf", 19)
-F_FOOT = font("dejavu/DejaVuSans.ttf", 16)
+def font(path, size):
+    return ImageFont.truetype(path, size)
 
 
-def wrap(draw, text, fnt, max_w):
-    """Wrap text to fit max_w pixels; return list of lines."""
+def spaced(text, gap):
+    """Letterspace a caps line by hand (Pillow has no tracking)."""
+    return (" " * gap).join(list(text))
+
+
+def wrap(draw, text, fnt, width):
+    """Greedy word wrap measured with the real font."""
     words = text.split()
-    lines, cur = [], ""
-    for w in words:
-        trial = (cur + " " + w).strip()
-        if draw.textlength(trial, font=fnt) <= max_w:
-            cur = trial
+    lines, current = [], ""
+    for word in words:
+        trial = (current + " " + word).strip()
+        if draw.textlength(trial, font=fnt) <= width:
+            current = trial
         else:
-            if cur:
-                lines.append(cur)
-            cur = w
-    if cur:
-        lines.append(cur)
+            if current:
+                lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
     return lines
 
 
-def centered(draw, y, text, fnt, fill, x0=0, x1=W):
-    w = draw.textlength(text, font=fnt)
-    draw.text(((x0 + x1 - w) / 2, y), text, font=fnt, fill=fill)
+STORIES = [
+    {
+        "kicker": "World Court",
+        "head": "ICJ: Myanmar committed genocide against the Rohingya",
+        "sub": "9-6 ruling, first against a state; reparations ordered",
+        "lead": True,
+    },
+    {
+        "kicker": "Summit",
+        "head": "Trump, Xi & Putin meet in Shenzhen",
+        "sub": "First three-way summit; joint peace declaration",
+    },
+    {
+        "kicker": "Markets",
+        "head": "Anthropic debuts on Nasdaq after the largest IPO in history",
+        "sub": "$81bn raised; shares priced $83",
+    },
+    {
+        "kicker": "Middle East",
+        "head": "Houthi attacks damage Riyadh's tallest tower",
+        "sub": "Strikes hit the capital's tallest tower",
+    },
+    {
+        "kicker": "Economy",
+        "head": "IMF: world debt soon to hit 100% of GDP",
+        "sub": "Highest since WWII, fund warns",
+    },
+    {
+        "kicker": "South Asia",
+        "head": "Bangladesh hit by violence amid protests",
+        "sub": "Unrest as exiled ex-leader's party protests",
+    },
+]
 
 
-def star(draw, cx, cy, r_out, r_in, points, fill):
-    pts = []
-    for i in range(points * 2):
-        r = r_out if i % 2 == 0 else r_in
-        a = math.pi * i / points - math.pi / 2
-        pts.append((cx + r * math.cos(a), cy + r * math.sin(a)))
-    draw.polygon(pts, fill=fill)
+def draw_masthead(draw):
+    title = font(SERIF_BOLD, 62)
+    draw.text((PAGE // 2, 44), "THE WORLD TODAY", font=title,
+              fill=INK, anchor="ma")
+    draw.line([(MARGIN, 128), (PAGE - MARGIN, 128)], fill=RULE, width=3)
+    draw.line([(MARGIN, 134), (PAGE - MARGIN, 134)], fill=RULE, width=1)
+    date_font = font(SANS_BOLD, 19)
+    draw.text((PAGE // 2, 146), spaced("THURSDAY · 19 NOVEMBER 2026", 1),
+              font=date_font, fill=ACCENT, anchor="ma")
 
 
-def icon_scales(draw, cx, cy):
-    c = DARKGOLD
-    draw.line([(cx, cy - 56), (cx, cy + 56)], fill=c, width=5)
-    draw.line([(cx - 54, cy - 42), (cx + 54, cy - 42)], fill=c, width=5)
-    draw.ellipse([cx - 7, cy - 66, cx + 7, cy - 52], fill=c)
-    for sx in (cx - 54, cx + 54):
-        draw.line([(sx, cy - 42), (sx - 20, cy - 6)], fill=c, width=4)
-        draw.line([(sx, cy - 42), (sx + 20, cy - 6)], fill=c, width=4)
-        draw.arc([sx - 20, cy - 22, sx + 20, cy + 10], 0, 180, fill=c, width=4)
+def draw_story(draw, story, x, y, width, head_size, sub_size, lead=False):
+    """Draw one story block at (x, y); return the y just below it."""
+    kicker_f = font(SANS_BOLD, 15 if not lead else 17)
+    draw.text((x, y), story["kicker"].upper(), font=kicker_f, fill=ACCENT)
+    y += 24 if not lead else 28
+
+    head_f = font(SERIF_BOLD, head_size)
+    line_h = int(head_size * 1.28)
+    for line in wrap(draw, story["head"], head_f, width):
+        draw.text((x, y), line, font=head_f, fill=INK)
+        y += line_h
+    y += 6
+
+    sub_f = font(SANS, sub_size)
+    sub_h = int(sub_size * 1.35)
+    for line in wrap(draw, story["sub"], sub_f, width):
+        draw.text((x, y), line, font=sub_f, fill=MUTED)
+        y += sub_h
+    return y
 
 
-def icon_flags(draw, x, y):
-    # Three small flags on poles: China, USA, Russia (compact, top-right).
-    def pole(px):
-        draw.line([(px, y), (px, y + 44)], fill=INK, width=3)
-
-    pole(x)
-    draw.rectangle([x + 2, y, x + 30, y + 18], fill=(222, 41, 16))
-    draw.ellipse([x + 6, y + 4, x + 11, y + 9], fill=(255, 222, 0))
-    pole(x + 38)
-    for i, col in enumerate([(178, 34, 52), (255, 255, 255), (178, 34, 52)]):
-        draw.rectangle([x + 40, y + i * 6, x + 68, y + (i + 1) * 6], fill=col)
-    draw.rectangle([x + 40, y, x + 52, y + 9], fill=(60, 59, 110))
-    pole(x + 76)
-    for i, col in enumerate([(255, 255, 255), (0, 57, 166), (213, 0, 50)]):
-        draw.rectangle([x + 78, y + i * 6, x + 106, y + (i + 1) * 6], fill=col)
+def draw_footer(draw):
+    draw.line([(MARGIN, 968), (PAGE - MARGIN, 968)], fill=FAINT, width=1)
+    foot = font(SANS, 15)
+    draw.text((PAGE // 2, 978), "SIX STORIES · COMPILED 19 NOVEMBER 2026",
+              font=foot, fill=MUTED, anchor="ma")
 
 
-def icon_chart(draw, x, y):
-    draw.line([(x, y + 48), (x + 100, y + 48)], fill=INK, width=4)
-    draw.line([(x, y), (x, y + 48)], fill=INK, width=4)
-    pts = [(x + 6, y + 38), (x + 30, y + 26), (x + 52, y + 30),
-           (x + 74, y + 12), (x + 94, y + 6)]
-    draw.line(pts, fill=(39, 174, 96), width=5, joint="curve")
-    draw.polygon([(x + 94, y + 6), (x + 84, y + 5), (x + 90, y + 16)],
-                 fill=(39, 174, 96))
+def build():
+    img = Image.new("RGB", (PAGE, PAGE), PAPER)
+    draw = ImageDraw.Draw(img)
 
+    draw_masthead(draw)
 
-def icon_tower(draw, cx, y):
-    draw.rectangle([cx - 18, y, cx + 18, y + 72], fill=(52, 73, 94))
-    for row in range(3):
-        for col in range(3):
-            wx = cx - 12 + col * 10
-            wy = y + 10 + row * 18
-            draw.rectangle([wx, wy, wx + 6, wy + 8], fill=(232, 197, 71))
-    star(draw, cx, y - 4, 20, 8, 8, (230, 126, 34))
+    lead = STORIES[0]
+    y = draw_story(draw, lead, MARGIN, 178, CONTENT_W, 40, 20, lead=True)
+    draw.line([(MARGIN, y + 16), (PAGE - MARGIN, y + 16)], fill=RULE, width=2)
 
+    grid_top = y + 34
+    col_w = (CONTENT_W - 32) // 2
+    left_x = MARGIN
+    right_x = MARGIN + col_w + 32
+    # vertical divider between the two columns
+    draw.line([(PAGE // 2, grid_top), (PAGE // 2, 950)], fill=FAINT, width=1)
 
-def icon_percent(draw, cx, cy):
-    draw.ellipse([cx - 34, cy - 34, cx + 34, cy + 34], fill=NAVY)
-    draw.text((cx - 24, cy - 24), "%", font=font("dejavu/DejaVuSans-Bold.ttf", 44),
-              fill=(255, 255, 255))
+    rest = STORIES[1:]
+    left_col = rest[:3]
+    right_col = rest[3:]
 
+    cursor = grid_top
+    for i, story in enumerate(left_col):
+        cursor = draw_story(draw, story, left_x, cursor, col_w, 28, 18)
+        if i < len(left_col) - 1:
+            draw.line([(left_x, cursor + 14), (left_x + col_w, cursor + 14)],
+                      fill=FAINT, width=1)
+            cursor += 40
 
-def icon_alert(draw, cx, cy):
-    draw.polygon([(cx, cy - 32), (cx - 32, cy + 26), (cx + 32, cy + 26)],
-                 fill=(230, 126, 34))
-    draw.rectangle([cx - 3, cy - 16, cx + 3, cy + 8], fill=(255, 255, 255))
-    draw.ellipse([cx - 4, cy + 14, cx + 4, cy + 22], fill=(255, 255, 255))
+    cursor = grid_top
+    for i, story in enumerate(right_col):
+        cursor = draw_story(draw, story, right_x, cursor, col_w, 28, 18)
+        if i < len(right_col) - 1:
+            draw.line([(right_x, cursor + 14), (right_x + col_w, cursor + 14)],
+                      fill=FAINT, width=1)
+            cursor += 40
 
-
-def panel(draw, x0, y0, x1, y1, tag, head, sub, icon):
-    draw.rectangle([x0, y0, x1, y1], fill=PANEL, outline=BORDER, width=2)
-    draw.rectangle([x0, y0, x0 + 8, y1], fill=RED)
-    draw.text((x0 + 24, y0 + 14), tag, font=F_TAG, fill=RED)
-    if icon == "flags":
-        icon_flags(draw, x1 - 132, y0 + 12)
-    elif icon == "chart":
-        icon_chart(draw, x1 - 124, y0 + 14)
-    elif icon == "tower":
-        icon_tower(draw, x1 - 62, y0 + 28)
-    elif icon == "percent":
-        icon_percent(draw, x1 - 62, y0 + 48)
-    tx = x0 + 24
-    tw = x1 - tx - 24
-    # Headlines stay clear of the top-right icon; subs run full width.
-    lines = wrap(draw, head, F_HEAD2, tw - 132)
-    ly = y0 + 48
-    for ln in lines:
-        draw.text((tx, ly), ln, font=F_HEAD2, fill=INK)
-        ly += 33
-    for ln in wrap(draw, sub, F_SUB2, tw):
-        draw.text((tx, ly + 4), ln, font=F_SUB2, fill=GRAY)
-        ly += 28
-
-
-def main():
-    img = Image.new("RGB", (W, H), PAPER)
-    d = ImageDraw.Draw(img)
-
-    # Masthead
-    d.rectangle([0, 0, W, 150], fill=NAVY)
-    centered(d, 26, "THE WORLD TODAY", F_TITLE, (255, 255, 255))
-    centered(d, 100, "THURSDAY  ·  19 NOVEMBER 2026", F_DATE, (232, 197, 71))
-    d.rectangle([0, 150, W, 156], fill=GOLD)
-
-    # Lead story: ICJ genocide ruling
-    x0, y0, x1, y1 = 28, 170, 996, 434
-    d.rectangle([x0, y0, x1, y1], fill=PANEL, outline=BORDER, width=2)
-    d.rectangle([x0, y0, x0 + 10, y1], fill=RED)
-    icon_scales(d, 118, y0 + 132)
-    tx = 210
-    d.text((tx, y0 + 18), "JUSTICE  ·  THE HAGUE", font=F_TAG, fill=RED)
-    head = "WORLD COURT: MYANMAR COMMITTED GENOCIDE"
-    lines = wrap(d, head, F_HEAD, x1 - tx - 24)
-    ly = y0 + 52
-    for ln in lines:
-        d.text((tx, ly), ln, font=F_HEAD, fill=INK)
-        ly += 50
-    subs = wrap(d, "Against the Rohingya — the first such ruling "
-                   "against a state; 9–6, reparations ordered.",
-                F_SUB, x1 - tx - 24)
-    for ln in subs:
-        d.text((tx, ly + 6), ln, font=F_SUB, fill=GRAY)
-        ly += 32
-
-    # Row 2
-    panel(d, 28, 446, 502, 670, "POLITICS  ·  SHENZHEN",
-          "TRUMP, XI & PUTIN MEET IN SHENZHEN",
-          "First three-way summit — joint peace declaration; "
-          "nuclear-risk talks, no concrete steps.",
-          "flags")
-    panel(d, 522, 446, 996, 670, "TECH  ·  NEW YORK",
-          "ANTHROPIC DEBUTS AFTER RECORD $81BN IPO",
-          "Largest IPO in history — shares priced at $83, "
-          "ticker ANT on Nasdaq.",
-          "chart")
-
-    # Row 3
-    panel(d, 28, 684, 502, 908, "CONFLICT  ·  RIYADH",
-          "HOUTHI ATTACKS DAMAGE RIYADH'S TALLEST TOWER",
-          "Saudi Arabia reports new attacks on the capital.",
-          "tower")
-    panel(d, 522, 684, 996, 908, "ECONOMY  ·  GLOBAL",
-          "IMF: WORLD DEBT SOON TO HIT 100% OF GDP",
-          "Highest since the Second World War, fund chief warns.",
-          "percent")
-
-    # Bottom strip: one more story, full width
-    y0, y1 = 922, 992
-    d.rectangle([28, y0, 996, y1], fill=PANEL, outline=BORDER, width=2)
-    icon_alert(d, 72, (y0 + y1) // 2)
-    d.text((118, y0 + 10), "UNREST  ·  DHAKA", font=F_TAG, fill=RED)
-    d.text((118, y0 + 36), "Bangladesh hit by violence amid protests "
-                           "by exiled ex-leader's party",
-           font=F_STRIP, fill=INK)
-
-    # Footer
-    centered(d, 1000, "Headlines as reported on 19 November 2026",
-             F_FOOT, GRAY)
-
-    img.save(OUT, "PNG")
-    print("wrote", OUT, os.path.getsize(OUT), "bytes")
+    draw_footer(draw)
+    out = os.path.join(HERE, "entry.png")
+    img.save(out, "PNG")
+    print("saved", out, img.size)
 
 
 if __name__ == "__main__":
-    main()
+    build()

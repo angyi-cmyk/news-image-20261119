@@ -1,24 +1,26 @@
 #!/usr/bin/env python3
-"""Entry program for make.fun news-image-20261119 (Python 3.13, stdlib only).
+"""Copy the rendered front page into the grader's output directory.
 
-Copies the entry image beside this file to /output/entry.png.
-The image is a newspaper-style front page summing up the world news of
-Thursday 19 November 2026; it is drawn by draw_image.py in this repo.
-
-Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
-    mkdir -p out && MAKEFUN_OUTPUT_DIR=out python3 main.py
-
-The output directory is only created, never removed: in the grader it is
-a mount point, and removing a mount point fails.
+The source image is resolved from this file's own location, never from
+the process working directory. The output directory is created if
+needed and its existing contents are left alone -- in the grader
+/output is a mount point, so it must never be removed.
 """
+
 import os
 import shutil
 
-out_dir = os.environ.get("MAKEFUN_OUTPUT_DIR", "/output")
-os.makedirs(out_dir, exist_ok=True)
+HERE = os.path.dirname(os.path.abspath(__file__))
 
-here = os.path.dirname(os.path.abspath(__file__))
-shutil.copyfile(
-    os.path.join(here, "entry.png"),
-    os.path.join(out_dir, "entry.png"),
-)
+
+def main():
+    src = os.path.join(HERE, "entry.png")
+    out_dir = os.environ.get("MAKEFUN_OUTPUT_DIR", "/output")
+    os.makedirs(out_dir, exist_ok=True)
+    dst = os.path.join(out_dir, "entry.png")
+    shutil.copyfile(src, dst)
+    print("copied", src, "->", dst)
+
+
+if __name__ == "__main__":
+    main()
